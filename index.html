@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<title>全家保障管理</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;padding:0;background:#f5f0eb;font-family:'Noto Sans TC','Helvetica Neue',Arial,sans-serif;}
+  input,select,textarea{font-family:inherit;}
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-thumb{background:#cec4b8;border-radius:4px;}
+  input[type=date]::-webkit-calendar-picker-indicator{opacity:0.5;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// 1. 設定你的雲端橋樑網址
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyqggh3Y2HGGXxCv26PykXcGJX2tm8S3ansy4GDiTlmCH9IOwtGA9x5btsTF3Axb31V/exec"; 
+
+function App() {
+  const [policies, setPolicies] = useState([]);
+  const [claims, setClaims] = useState([]);
+  const [loading, setLoading] = useState(true); // 新增一個讀取狀態
+
+  // 2. 雲端抓取：網頁打開時執行一次
+  useEffect(() => {
+    fetch(GAS_URL)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.policies) {
+          setPolicies(data.policies);
+          setClaims(data.claims || []);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("讀取失敗:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  // 3. 雲端儲存：當 policies 或 claims 改變時，自動傳回 Google Sheets
+  useEffect(() => {
+    if (!loading) { // 確保不是在初始化讀取時就把空的覆蓋回去
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ policies, claims })
+      });
+    }
+  }, [policies, claims, loading]);
+
+  // 4. 在畫面最前面加一個讀取中的提示
+  if (loading) {
+    return (
+      <div style={{display:'flex', justifyContent:'center', alignItems:'center', height:'100vh', background:'#f5f0eb', color:'#7a6e64'}}>
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:40, marginBottom:10}}>☁️</div>
+          <div>同步雲端資料中...</div>
+        </div>
+      </div>
+    );
+  }
+const C = {
+  bg:"#f5f0eb", card:"#fdfcfa", border:"#e0d8cf", border2:"#cec4b8",
+  text:"#3a3228", sub:"#7a6e64", muted:"#b0a49a",
+  accent:"#8b6f5e", accentBg:"#ede5dc", accentDark:"#6b5244",
+  green:"#6a8f72", greenBg:"#eaf2eb",
+  amber:"#a07840", amberBg:"#f5ead8",
+  red:"#9b5050", redBg:"#f5e8e8",
+  blue:"#5a7a8f", blueBg:"#e8eff5",
+  header:"#4a3728", white:"#fdfcfa",
+};
+
+const TYPE_COLORS = {
+  life:"#6b7f5e", accident:"#a07840", medical:"#5a8a7a", accident_medical:"#5a7a8a",
+  cancer:"#8a5a7a", ltc:"#7a5a8a", disability:"#6a5a8a", epidemic:"#7a8a5a", life_other:"#8a8070",
+  car_compulsory:"#9b5050", car_voluntary:"#a06040", moto:"#a07040",
+  fire:"#8a7040", earthquake:"#7a6040", travel:"#5a7a8a", prod_other:"#7a7a70",
+};
+
+const LIFE_TYPES = [
+  {id:"life",label:"壽險（主約）"},{id:"accident",label:"意外險"},
+  {id:"medical",label:"實支實付醫療險"},{id:"accident_medical",label:"實支實付意外醫療險"},
+  {id:"cancer",label:"癌症險"},{id:"ltc",label:"長照險"},
+  {id:"disability",label:"失能險"},{id:"epidemic",label:"防疫險"},{id:"life_other",label:"其他"},
+];
+const PROD_TYPES = [
+  {id:"car_compulsory",label:"汽車強制險"},{id:"car_voluntary",label:"汽車任意險"},
+  {id:"moto",label:"機車險"},{id:"fire",label:"住宅火險"},
+  {id:"earthquake",label:"地震險"},{id:"travel",label:"旅平險"},{id:"prod_other",label:"其他產險"},
+];
+const CURRENCIES = ["TWD","USD","JPY","EUR","AUD","RMB"];
+
+const COVERAGE_FIELDS = {
+  life:[{key:"death_benefit",label:"身故保險金（萬）"},{key:"disability_benefit",label:"完全失能一次金（萬）"}],
+  accident:[{key:"death_benefit",label:"意外身故（萬）"},{key:"disability_benefit",label:"意外失能（萬）"},{key:"daily_hosp",label:"住院日額（元/日）"},{key:"fracture",label:"骨折保險金（元）"}],
+  medical:[{key:"daily_hosp",label:"住院日額（元/日）"},{key:"icu_daily",label:"加護病房日額（元/日）"},{key:"surgery",label:"手術費用（元）"},{key:"misc_limit",label:"雜費上限（萬）"},{key:"expense_limit",label:"每次費用上限（萬）"},{key:"copy_claim",label:"可副本理賠",type:"checkbox"}],
+  accident_medical:[{key:"daily_hosp",label:"住院日額（元/日）"},{key:"surgery",label:"手術費用（元）"},{key:"misc_limit",label:"雜費上限（萬）"},{key:"expense_limit",label:"每次費用上限（萬）"},{key:"copy_claim",label:"可副本理賠",type:"checkbox"}],
+  cancer:[{key:"diagnosis_lumpsum",label:"初次罹癌一次金（萬）"},{key:"daily_hosp",label:"住院日額（元/日）"},{key:"surgery",label:"手術費用（元）"},{key:"chemo",label:"化療/放療（元/次）"},{key:"outpatient",label:"門診化療（元/次）"}],
+  ltc:[{key:"monthly_benefit",label:"長照月給付（元/月）"},{key:"lumpsum",label:"一次金（萬）"},{key:"benefit_period",label:"給付期間（年）"}],
+  disability:[{key:"monthly_benefit",label:"失能月給付（元/月）"},{key:"lumpsum",label:"一次金（萬）"},{key:"benefit_period",label:"給付期間（年）"}],
+  epidemic:[{key:"quarantine_daily",label:"隔離日額（元/日）"},{key:"daily_hosp",label:"住院日額（元/日）"},{key:"lumpsum",label:"確診一次金（萬）"}],
+  life_other:[],
+  car_compulsory:[{key:"bodily_injury",label:"傷害醫療（萬）"},{key:"death_limit",label:"死亡失能（萬）"}],
+  car_voluntary:[{key:"third_party",label:"第三人責任險（萬）"},{key:"collision",label:"車體損失（萬）"},{key:"theft",label:"竊盜險（萬）"}],
+  moto:[{key:"third_party",label:"第三人責任險（萬）"},{key:"bodily_injury",label:"傷害醫療（萬）"}],
+  fire:[{key:"building",label:"建築物（萬）"},{key:"contents",label:"動產（萬）"},{key:"liability",label:"公共意外責任（萬）"}],
+  earthquake:[{key:"building",label:"建築物（萬）"},{key:"temp_living",label:"臨時住宿（萬）"}],
+  travel:[{key:"death_benefit",label:"意外身故（萬）"},{key:"medical",label:"海外醫療（萬）"},{key:"delay",label:"班機延誤（元）"},{key:"luggage",label:"行李損失（萬）"}],
+  prod_other:[],
+};
+
+const SUMMARY_LABELS = {
+  daily_hosp:"住院日額（元/日）", icu_daily:"加護病房日額（元/日）",
+  surgery:"手術費用（元）", misc_limit:"雜費上限（萬）", expense_limit:"費用上限（萬）",
+  death_benefit:"身故保險金（萬）", disability_benefit:"失能保險金（萬）",
+  diagnosis_lumpsum:"初次罹癌一次金（萬）", monthly_benefit:"月給付（元/月）", lumpsum:"一次金（萬）",
+};
+
+function tlabel(type,custom){
+  if(type==="life_other"||type==="prod_other") return custom||"其他";
+  return [...LIFE_TYPES,...PROD_TYPES].find(t=>t.id===type)?.label||type;
+}
+function emptyRider(){ return {id:Date.now()+Math.random(),type:"medical",type_custom:"",term_type:"終身",coverage_age:"",coverage:{},custom_fields:[],status:"active"}; }
+function emptyPolicy(kind="life"){ return {id:Date.now(),kind,company:"",policy_number:"",policy_holder:"",insured_name:"",beneficiary:"",start_date:"",end_date:"",reminder_date:"",payment_period:"",currency:"TWD",premium_note:"",status:"active",notes:"",main_type:kind==="life"?"life":"car_compulsory",main_type_custom:"",main_term_type:kind==="life"?"終身":"一年期",main_coverage_age:"",main_coverage:{},main_custom_fields:[],riders:[]}; }
+
+// ── App ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab,setTab]=useState("life");
+  const [screen,setScreen]=useState("list");
+  const [policies,setPolicies]=useState(()=>loadData("ins_v4_policies",[]));
+  const [claims,setClaims]=useState(()=>loadData("ins_v4_claims",[]));
+  const [editing,setEditing]=useState(null);
+  const [editClaim,setEditClaim]=useState(null);
+  const [delConfirm,setDelConfirm]=useState(null);
+  const [summaryPerson,setSummaryPerson]=useState("all");
+
+ 
+
+  const today=new Date(); today.setHours(0,0,0,0);
+  const alerts=policies.filter(p=>{
+    if(!p.reminder_date||p.status!=="active") return false;
+    const d=new Date(p.reminder_date); d.setHours(0,0,0,0);
+    return d<=new Date(today.getTime()+30*86400000);
+  });
+  const alertCount=alerts.length;
+
+  function savePolicy(p){ setPolicies(ps=>ps.find(x=>x.id===p.id)?ps.map(x=>x.id===p.id?p:x):[...ps,p]); setScreen("list"); }
+  function deletePolicy(id){ setPolicies(ps=>ps.filter(p=>p.id!==id)); setClaims(cs=>cs.filter(c=>c.policy_id!==id)); setDelConfirm(null); }
+  function saveClaim(c){ setClaims(cs=>cs.find(x=>x.id===c.id)?cs.map(x=>x.id===c.id?c:x):[...cs,c]); setScreen("list"); }
+  function deleteClaim(id){ setClaims(cs=>cs.filter(c=>c.id!==id)); }
+
+  const persons=[...new Set(policies.map(p=>p.insured_name).filter(Boolean))];
+  const lifePolicies=policies.filter(p=>p.kind==="life");
+  const prodPolicies=policies.filter(p=>p.kind==="prod");
+  const isSubScreen=screen==="edit"||screen==="editClaim";
+
+  return (
+    <div style={{fontFamily:"'Noto Sans TC','Helvetica Neue',Arial,sans-serif",background:C.bg,minHeight:"100vh",maxWidth:430,margin:"0 auto",display:"flex",flexDirection:"column",position:"relative"}}>
+      <TopBar
+        screen={screen} tab={tab} onBack={()=>setScreen("list")}
+        editingLabel={screen==="edit"?(editing?.company?"編輯保單":"新增保單"):screen==="editClaim"?(editClaim?.type_label||"理賠紀錄"):""}
+        onAdd={()=>{
+          if(tab==="life"||tab==="prod"){ setEditing(emptyPolicy(tab==="life"?"life":"prod")); setScreen("edit"); }
+          if(tab==="claims"){ setEditClaim({id:Date.now(),policy_id:"",date:"",amount:"",currency:"TWD",type_label:"",description:"",category:"life",status:"settled"}); setScreen("editClaim"); }
+        }}
+        showAdd={screen==="list"&&(tab==="life"||tab==="prod"||tab==="claims")}
+      />
+      <div style={{flex:1,overflowY:"auto",padding:"12px 14px",paddingBottom:80}}>
+        {screen==="edit"&&editing&&<EditView policy={editing} onSave={savePolicy} onCancel={()=>setScreen("list")}/>}
+        {screen==="editClaim"&&editClaim&&<ClaimEditView claim={editClaim} policies={policies} onSave={saveClaim} onCancel={()=>setScreen("list")}/>}
+        {screen==="list"&&tab==="life"&&<PolicyList policies={lifePolicies} kind="life" today={today} onEdit={p=>{setEditing(JSON.parse(JSON.stringify(p)));setScreen("edit");}} onDelete={id=>setDelConfirm(id)}/>}
+        {screen==="list"&&tab==="prod"&&<PolicyList policies={prodPolicies} kind="prod" today={today} onEdit={p=>{setEditing(JSON.parse(JSON.stringify(p)));setScreen("edit");}} onDelete={id=>setDelConfirm(id)}/>}
+        {screen==="list"&&tab==="claims"&&<ClaimsView claims={claims} policies={policies} onEdit={c=>{setEditClaim(c);setScreen("editClaim");}} onDelete={deleteClaim}/>}
+        {screen==="list"&&tab==="alerts"&&<AlertsView policies={policies} alerts={alerts} today={today}/>}
+        {screen==="list"&&tab==="summary"&&<SummaryView policies={policies} claims={claims} persons={persons} summaryPerson={summaryPerson} setSummaryPerson={setSummaryPerson}/>}
+      </div>
+      {!isSubScreen&&<BottomNav tab={tab} setTab={setTab} alertCount={alertCount}/>}
+      {delConfirm&&(
+        <Modal onClose={()=>setDelConfirm(null)}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:34,marginBottom:10}}>🗑</div>
+            <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>確定刪除此保單？</div>
+            <div style={{color:C.sub,fontSize:13,marginBottom:20}}>相關理賠紀錄也會一併刪除</div>
+            <div style={{display:"flex",gap:10}}>
+              <Btn ghost onClick={()=>setDelConfirm(null)}>取消</Btn>
+              <Btn danger onClick={()=>deletePolicy(delConfirm)}>確定刪除</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function TopBar({screen,tab,onBack,editingLabel,onAdd,showAdd}) {
+  const titles={life:"壽健險保單",prod:"產險保單",claims:"理賠紀錄",alerts:"提醒事項",summary:"保障總覽"};
+  const isEdit=screen==="edit"||screen==="editClaim";
+  return (
+    <div style={{background:C.header,color:C.white,padding:"0 16px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100,flexShrink:0}}>
+      {isEdit
+        ?<button onClick={onBack} style={{background:"none",border:"none",color:"#d4c4b8",fontSize:22,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:18}}>‹</span>
+            <span style={{fontSize:14,fontWeight:500}}>{editingLabel}</span>
+          </button>
+        :<div>
+            <div style={{fontSize:16,fontWeight:700,letterSpacing:1}}>{titles[tab]||""}</div>
+            <div style={{fontSize:10,opacity:.5,letterSpacing:1.5,marginTop:1}}>FAMILY INSURANCE</div>
+          </div>
+      }
+      {showAdd&&!isEdit&&(
+        <button onClick={onAdd} style={{background:C.accentDark,border:"none",color:C.white,borderRadius:8,padding:"7px 14px",fontSize:13,cursor:"pointer",fontWeight:600}}>＋ 新增</button>
+      )}
+    </div>
+  );
+}
+
+function BottomNav({tab,setTab,alertCount}) {
+  const items=[
+    {k:"life",icon:"💊",label:"壽健險"},
+    {k:"prod",icon:"🚗",label:"產險"},
+    {k:"claims",icon:"📑",label:"理賠"},
+    {k:"alerts",icon:"🔔",label:"提醒",badge:alertCount},
+    {k:"summary",icon:"📊",label:"總覽"},
+  ];
+  return (
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:C.white,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200}}>
+      {items.map(({k,icon,label,badge})=>{
+        const active=tab===k;
+        return (
+          <button key={k} onClick={()=>setTab(k)}
+            style={{flex:1,padding:"10px 0 8px",border:"none",background:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative"}}>
+            <span style={{fontSize:20,lineHeight:1,filter:active?"none":"grayscale(0.4) opacity(0.55)"}}>{icon}</span>
+            <span style={{fontSize:10,color:active?C.accentDark:C.muted,fontWeight:active?700:400,letterSpacing:.3}}>{label}</span>
+            {active&&<span style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:24,height:2,background:C.accentDark,borderRadius:2}}/>}
+            {badge>0&&<span style={{position:"absolute",top:6,right:"18%",background:C.red,color:"#fff",fontSize:9,fontWeight:700,borderRadius:10,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{badge}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PolicyList({policies,kind,onEdit,onDelete,today}) {
+  const [search,setSearch]=useState("");
+  const [filterStatus,setFilterStatus]=useState("all");
+  const filtered=policies.filter(p=>{
+    const txt=[p.insured_name,p.company,p.policy_number,tlabel(p.main_type,p.main_type_custom)].join(" ").toLowerCase();
+    return txt.includes(search.toLowerCase())&&(filterStatus==="all"||p.status===filterStatus);
+  });
+  return (
+    <div>
+      <div style={{position:"relative",marginBottom:10}}>
+        <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:C.muted,fontSize:14}}>🔍</span>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="搜尋被保險人、公司、保單號碼"
+          style={{width:"100%",padding:"10px 12px 10px 34px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,outline:"none",background:C.white,color:C.text}}/>
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}}>
+        {[["all","全部"],["active","有效"],["expired","已到期"],["claimed_void","理賠失效"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setFilterStatus(v)}
+            style={{padding:"5px 13px",borderRadius:20,border:`1.5px solid ${filterStatus===v?C.accent:C.border}`,background:filterStatus===v?C.accent:C.white,color:filterStatus===v?C.white:C.sub,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontWeight:filterStatus===v?600:400,flexShrink:0}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {filtered.length===0&&<Empty icon={kind==="life"?"💊":"🚗"} text="尚無保單，點右上角新增"/>}
+      {filtered.map(p=><PolicyCard key={p.id} p={p} onEdit={onEdit} onDelete={onDelete} today={today}/>)}
+    </div>
+  );
+}
+
+function PolicyCard({p,onEdit,onDelete,today}) {
+  const [open,setOpen]=useState(false);
+  const stMap={active:{l:"有效",c:C.green,bg:C.greenBg},expired:{l:"已到期",c:C.amber,bg:C.amberBg},claimed_void:{l:"理賠失效",c:C.red,bg:C.redBg}};
+  const st=stMap[p.status]||stMap.active;
+  const mc=TYPE_COLORS[p.main_type]||C.accent;
+  let remind=null;
+  if(p.reminder_date&&p.status==="active"){
+    const d=new Date(p.reminder_date); d.setHours(0,0,0,0);
+    const diff=Math.ceil((d-today)/86400000);
+    if(diff<=30&&diff>=0) remind=diff===0?"今天到期":`${diff} 天後到期`;
+    else if(diff<0) remind="已逾提醒日";
+  }
+  const allRiders=p.riders||[];
+  const activeRiders=allRiders.filter(r=>r.status==="active");
+  return (
+    <div style={{background:C.white,borderRadius:14,marginBottom:12,border:`1px solid ${C.border}`,overflow:"hidden",opacity:p.status!=="active"?.82:1}}>
+      <div style={{borderLeft:`4px solid ${mc}`,padding:"14px 14px 12px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:15,color:C.text}}>{p.company||"（未填保險公司）"}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{p.policy_number?"保單號碼　"+p.policy_number:"—"}</div>
+          </div>
+          <span style={{background:st.bg,color:st.c,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{st.l}</span>
+        </div>
+        <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:5}}>
+          <Chip>👤 {p.insured_name||"未填"}</Chip>
+          <Chip>💱 {p.currency}</Chip>
+          {p.start_date&&<Chip>🗓 {p.start_date}</Chip>}
+          {remind&&<span style={{background:C.redBg,color:C.red,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:600}}>⚠ {remind}</span>}
+        </div>
+        <div style={{marginTop:10,background:C.accentBg,borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{background:mc,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>主約</span>
+          <span style={{fontSize:13,fontWeight:600,color:C.text}}>{tlabel(p.main_type,p.main_type_custom)}</span>
+          <span style={{fontSize:11,color:C.sub,marginLeft:"auto"}}>{p.main_term_type}</span>
+        </div>
+        {allRiders.length>0&&(
+          <button onClick={()=>setOpen(o=>!o)}
+            style={{width:"100%",marginTop:8,padding:"7px 0",borderRadius:9,border:`1px dashed ${C.border2}`,background:"none",cursor:"pointer",fontSize:12,color:C.sub,display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+            <span style={{fontSize:10}}>{open?"▲":"▼"}</span>
+            附約　{activeRiders.length} 個有效{allRiders.length>activeRiders.length?`（共 ${allRiders.length} 個）`:""}
+          </button>
+        )}
+        {open&&(
+          <div style={{marginTop:8}}>
+            {allRiders.map(r=>{
+              const rc=TYPE_COLORS[r.type]||C.accent;
+              const rsC=r.status==="active"?C.green:r.status==="expired"?C.amber:C.red;
+              const rsL=r.status==="active"?"有效":r.status==="expired"?"到期":"失效";
+              return (
+                <div key={r.id} style={{borderLeft:`3px solid ${rc}`,paddingLeft:10,marginBottom:7,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <span style={{fontSize:13,fontWeight:600,color:C.text}}>{tlabel(r.type,r.type_custom)}</span>
+                    <span style={{fontSize:11,color:C.muted,marginLeft:6}}>{r.term_type}{r.coverage_age?` · 保至 ${r.coverage_age} 歲`:""}</span>
+                  </div>
+                  <span style={{fontSize:11,color:rsC,fontWeight:600}}>{rsL}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div style={{display:"flex",borderTop:`1px solid ${C.border}`}}>
+        <button onClick={()=>onEdit(p)} style={{flex:1,padding:"11px 0",border:"none",background:"none",color:C.accent,cursor:"pointer",fontWeight:600,fontSize:13,borderRight:`1px solid ${C.border}`}}>編輯</button>
+        <button onClick={()=>onDelete(p.id)} style={{padding:"11px 20px",border:"none",background:"none",color:C.red,cursor:"pointer",fontSize:13}}>刪除</button>
+      </div>
+    </div>
+  );
+}
+
+function EditView({policy,onSave,onCancel}) {
+  const [p,setP]=useState(policy);
+  const isLife=p.kind==="life";
+  const typeList=isLife?LIFE_TYPES:PROD_TYPES;
+  const set=(k,v)=>setP(prev=>({...prev,[k]:v}));
+  const setMC=(k,v)=>setP(prev=>({...prev,main_coverage:{...prev.main_coverage,[k]:v}}));
+  const addMCF=()=>setP(prev=>({...prev,main_custom_fields:[...(prev.main_custom_fields||[]),{id:Date.now(),label:"",value:""}]}));
+  const updMCF=(i,f,v)=>setP(prev=>{const a=[...(prev.main_custom_fields||[])];a[i]={...a[i],[f]:v};return{...prev,main_custom_fields:a};});
+  const delMCF=i=>setP(prev=>({...prev,main_custom_fields:prev.main_custom_fields.filter((_,j)=>j!==i)}));
+  const addRider=()=>setP(prev=>({...prev,riders:[...(prev.riders||[]),emptyRider()]}));
+  const updateRider=(i,r)=>setP(prev=>{const a=[...prev.riders];a[i]=r;return{...prev,riders:a};});
+  const removeRider=i=>setP(prev=>({...prev,riders:prev.riders.filter((_,j)=>j!==i)}));
+  return (
+    <div>
+      <Sec title="保單基本資料">
+        <F label="保險公司" value={p.company} onChange={v=>set("company",v)} ph="例：國泰人壽"/>
+        <F label="保單號碼" value={p.policy_number} onChange={v=>set("policy_number",v)} ph="保單號碼"/>
+        <F label="要保人" value={p.policy_holder} onChange={v=>set("policy_holder",v)} ph="姓名"/>
+        <F label="被保險人" value={p.insured_name} onChange={v=>set("insured_name",v)} ph="姓名"/>
+        {isLife&&<F label="受益人" value={p.beneficiary} onChange={v=>set("beneficiary",v)} ph="姓名或法定繼承人"/>}
+        <Row>
+          <FS label="幣別" value={p.currency} onChange={v=>set("currency",v)} opts={CURRENCIES.map(c=>({value:c,label:c}))}/>
+          <FS label="保單狀態" value={p.status} onChange={v=>set("status",v)} opts={[{value:"active",label:"有效"},{value:"expired",label:"已到期"},{value:"claimed_void",label:"理賠後失效"}]}/>
+        </Row>
+        <F label="保費備註" value={p.premium_note} onChange={v=>set("premium_note",v)} ph="例：年繳 $18,000，第 6 年起調整"/>
+        <Row>
+          <F label="承保日" value={p.start_date} onChange={v=>set("start_date",v)} type="date"/>
+          <F label="到期日" value={p.end_date} onChange={v=>set("end_date",v)} type="date"/>
+        </Row>
+        <F label="🔔 提醒日" value={p.reminder_date} onChange={v=>set("reminder_date",v)} type="date"/>
+        {isLife&&<F label="繳費期間" value={p.payment_period} onChange={v=>set("payment_period",v)} ph="例：20 年期 / 繳至 65 歲"/>}
+      </Sec>
+      <div style={{background:"#ede8e0",borderRadius:14,padding:16,marginBottom:12,border:`1.5px solid ${C.border2}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+          <span style={{background:C.accentDark,color:"#fff",borderRadius:6,padding:"3px 10px",fontSize:12,fontWeight:700}}>主約</span>
+          <span style={{fontWeight:700,fontSize:13,color:C.text}}>主要契約</span>
+        </div>
+        <FS label="險種" value={p.main_type} onChange={v=>set("main_type",v)} opts={typeList.map(t=>({value:t.id,label:t.label}))}/>
+        {(p.main_type==="life_other"||p.main_type==="prod_other")&&<F label="自定險種名稱" value={p.main_type_custom} onChange={v=>set("main_type_custom",v)} ph="請輸入險種名稱"/>}
+        <Row>
+          <FS label="保障類型" value={p.main_term_type} onChange={v=>set("main_term_type",v)} opts={(isLife?["終身","定期"]:["一年期","多年期"]).map(v=>({value:v,label:v}))}/>
+          {isLife&&<F label="保障最高年齡" value={p.main_coverage_age} onChange={v=>set("main_coverage_age",v)} ph="例：99 歲"/>}
+        </Row>
+        <CoverageFields type={p.main_type} coverage={p.main_coverage||{}} setCov={setMC} customFields={p.main_custom_fields||[]} addCF={addMCF} updCF={updMCF} delCF={delMCF}/>
+      </div>
+      {isLife&&(
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <span style={{fontWeight:700,fontSize:14,color:C.text}}>附約列表</span>
+            <button onClick={addRider} style={{padding:"6px 14px",borderRadius:9,border:"none",background:C.accent,color:"#fff",fontSize:12,cursor:"pointer",fontWeight:600}}>＋ 新增附約</button>
+          </div>
+          {(p.riders||[]).length===0&&(
+            <div style={{textAlign:"center",padding:"18px",color:C.muted,fontSize:13,background:C.white,borderRadius:12,border:`1.5px dashed ${C.border2}`}}>尚無附約，點右上角新增</div>
+          )}
+          {(p.riders||[]).map((r,i)=>(
+            <RiderEditor key={r.id} rider={r} index={i} onChange={r=>updateRider(i,r)} onRemove={()=>removeRider(i)}/>
+          ))}
+        </div>
+      )}
+      <Sec title="備註">
+        <textarea value={p.notes} onChange={e=>set("notes",e.target.value)} placeholder="其他備註…" style={{...IS,height:70,resize:"vertical"}}/>
+      </Sec>
+      <button onClick={()=>onSave(p)} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:C.header,color:C.white,fontSize:15,fontWeight:700,cursor:"pointer",letterSpacing:.5,marginBottom:8}}>儲存保單</button>
+    </div>
+  );
+}
+
+function RiderEditor({rider,index,onChange,onRemove}) {
+  const [open,setOpen]=useState(true);
+  const set=(k,v)=>onChange({...rider,[k]:v});
+  const setCov=(k,v)=>onChange({...rider,coverage:{...rider.coverage,[k]:v}});
+  const addCF=()=>onChange({...rider,custom_fields:[...(rider.custom_fields||[]),{id:Date.now(),label:"",value:""}]});
+  const updCF=(i,f,v)=>{const a=[...(rider.custom_fields||[])];a[i]={...a[i],[f]:v};onChange({...rider,custom_fields:a});};
+  const delCF=i=>onChange({...rider,custom_fields:rider.custom_fields.filter((_,j)=>j!==i)});
+  const color=TYPE_COLORS[rider.type]||C.accent;
+  return (
+    <div style={{background:C.white,borderRadius:13,marginBottom:10,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
+      <div style={{background:C.accentBg,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={()=>setOpen(o=>!o)}>
+        <span style={{background:color,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:11,fontWeight:700}}>附約 {index+1}</span>
+        <span style={{fontSize:13,fontWeight:600,color:C.text,flex:1}}>{tlabel(rider.type,rider.type_custom)}</span>
+        <span style={{fontSize:11,color:rider.status==="active"?C.green:C.red,fontWeight:600}}>{rider.status==="active"?"有效":"失效"}</span>
+        <span style={{color:C.muted,fontSize:11}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{padding:"12px 14px"}}>
+          <FS label="險種" value={rider.type} onChange={v=>set("type",v)} opts={LIFE_TYPES.map(t=>({value:t.id,label:t.label}))}/>
+          {rider.type==="life_other"&&<F label="自定名稱" value={rider.type_custom} onChange={v=>set("type_custom",v)} ph="險種名稱"/>}
+          <Row>
+            <FS label="保障類型" value={rider.term_type} onChange={v=>set("term_type",v)} opts={["終身","定期"].map(v=>({value:v,label:v}))}/>
+            <F label="保障最高年齡" value={rider.coverage_age} onChange={v=>set("coverage_age",v)} ph="例：75 歲"/>
+          </Row>
+          <FS label="附約狀態" value={rider.status} onChange={v=>set("status",v)} opts={[{value:"active",label:"有效"},{value:"expired",label:"已到期"},{value:"claimed_void",label:"理賠後失效"}]}/>
+          <div style={{fontWeight:600,fontSize:12,color:C.sub,margin:"10px 0 6px"}}>保障內容</div>
+          <CoverageFields type={rider.type} coverage={rider.coverage||{}} setCov={setCov} customFields={rider.custom_fields||[]} addCF={addCF} updCF={updCF} delCF={delCF}/>
+          <button onClick={onRemove} style={{width:"100%",marginTop:8,padding:"8px 0",borderRadius:9,border:`1px solid ${C.red}`,background:"none",color:C.red,cursor:"pointer",fontSize:12}}>移除此附約</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CoverageFields({type,coverage,setCov,customFields,addCF,updCF,delCF}) {
+  const fields=COVERAGE_FIELDS[type]||[];
+  return (
+    <div>
+      {fields.map(f=>
+        f.type==="checkbox"
+          ?<div key={f.key} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+              <input type="checkbox" id={f.key} checked={!!coverage[f.key]} onChange={e=>setCov(f.key,e.target.checked)} style={{width:17,height:17,cursor:"pointer",accentColor:C.accent}}/>
+              <label htmlFor={f.key} style={{fontSize:14,color:C.text,cursor:"pointer"}}>{f.label}</label>
+            </div>
+          :<F key={f.key} label={f.label} value={coverage[f.key]||""} onChange={v=>setCov(f.key,v)} ph="金額" type="number"/>
+      )}
+      {customFields.map((cf,i)=>(
+        <div key={cf.id} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+          <input value={cf.label} onChange={e=>updCF(i,"label",e.target.value)} placeholder="項目名稱" style={{...IS,flex:"0 0 96px"}}/>
+          <input value={cf.value} onChange={e=>updCF(i,"value",e.target.value)} placeholder="金額 / 內容" style={{...IS,flex:1}}/>
+          <button onClick={()=>delCF(i)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:20,lineHeight:1}}>×</button>
+        </div>
+      ))}
+      <button onClick={addCF} style={{width:"100%",padding:"7px 0",borderRadius:9,border:`1px dashed ${C.border2}`,background:"none",color:C.sub,cursor:"pointer",fontSize:12,marginTop:4}}>＋ 新增自訂項目</button>
+    </div>
+  );
+}
+
+function ClaimsView({claims,policies,onEdit,onDelete}) {
+  const [cat,setCat]=useState("all");
+  const filtered=cat==="all"?claims:claims.filter(c=>c.category===cat);
+  const lifeTotal=claims.filter(c=>c.category==="life").reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const prodTotal=claims.filter(c=>c.category==="prod").reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <StatCard icon="💊" label="壽健險理賠累計" value={lifeTotal.toLocaleString()} unit="元" color={C.blue}/>
+        <StatCard icon="🚗" label="產險理賠累計" value={prodTotal.toLocaleString()} unit="元" color={C.amber}/>
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
+        {[["all","全部"],["life","壽健險"],["prod","產險"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setCat(v)}
+            style={{padding:"5px 14px",borderRadius:20,border:`1.5px solid ${cat===v?C.accent:C.border}`,background:cat===v?C.accent:C.white,color:cat===v?C.white:C.sub,fontSize:12,cursor:"pointer",fontWeight:cat===v?600:400}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {filtered.length===0&&<Empty icon="📑" text="尚無理賠紀錄，點右上角新增"/>}
+      {filtered.map(c=>{
+        const pol=policies.find(p=>p.id===c.policy_id);
+        const stc={settled:C.green,pending:C.amber,rejected:C.red};
+        const stl={settled:"已結案",pending:"申請中",rejected:"拒賠"};
+        return (
+          <div key={c.id} style={{background:C.white,borderRadius:13,padding:14,marginBottom:10,border:`1px solid ${C.border}`,borderLeft:`4px solid ${c.category==="life"?C.blue:C.amber}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:14,color:C.text}}>{c.type_label||"理賠"}</div>
+                <div style={{fontSize:12,color:C.sub,marginTop:2}}>{pol?`${pol.insured_name||"—"} · ${pol.company||"—"}`:"（保單已刪除）"}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontWeight:800,fontSize:15,color:C.green}}>{parseFloat(c.amount||0).toLocaleString()} {c.currency}</div>
+                <div style={{fontSize:11,color:stc[c.status]||C.muted,fontWeight:600}}>{stl[c.status]||""}</div>
+              </div>
+            </div>
+            {c.date&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>📅 {c.date}</div>}
+            {c.description&&<div style={{fontSize:12,color:C.sub,marginTop:6,background:C.bg,borderRadius:8,padding:"6px 10px"}}>{c.description}</div>}
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <button onClick={()=>onEdit(c)} style={{flex:1,padding:"8px 0",borderRadius:9,border:`1px solid ${C.border2}`,color:C.accent,background:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>編輯</button>
+              <button onClick={()=>onDelete(c.id)} style={{padding:"8px 14px",borderRadius:9,border:`1px solid ${C.border}`,color:C.red,background:"none",cursor:"pointer",fontSize:13}}>刪除</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ClaimEditView({claim,policies,onSave,onCancel}) {
+  const [c,setC]=useState(claim);
+  const set=(k,v)=>setC(prev=>({...prev,[k]:v}));
+  const catPolicies=policies.filter(p=>c.category==="life"?p.kind==="life":p.kind==="prod");
+  return (
+    <div>
+      <Sec title="理賠資料">
+        <FS label="分類" value={c.category} onChange={v=>set("category",v)} opts={[{value:"life",label:"壽健險"},{value:"prod",label:"產險"}]}/>
+        <FS label="關聯保單" value={c.policy_id||""} onChange={v=>set("policy_id",v?Number(v):"")}
+          opts={[{value:"",label:"（不關聯保單）"},...catPolicies.map(p=>({value:p.id,label:`${p.insured_name||"—"} · ${p.company||"—"}`}))]}/>
+        <F label="理賠項目" value={c.type_label} onChange={v=>set("type_label",v)} ph="例：住院日額、手術費"/>
+        <Row>
+          <F label="理賠日期" value={c.date} onChange={v=>set("date",v)} type="date"/>
+          <FS label="幣別" value={c.currency} onChange={v=>set("currency",v)} opts={CURRENCIES.map(x=>({value:x,label:x}))}/>
+        </Row>
+        <F label="理賠金額" value={c.amount} onChange={v=>set("amount",v)} ph="金額" type="number"/>
+        <FS label="狀態" value={c.status} onChange={v=>set("status",v)} opts={[{value:"settled",label:"已結案"},{value:"pending",label:"申請中"},{value:"rejected",label:"拒賠"}]}/>
+        <F label="說明" value={c.description} onChange={v=>set("description",v)} ph="理賠說明"/>
+      </Sec>
+      <button onClick={()=>onSave(c)} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:C.green,color:C.white,fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:8}}>儲存理賠紀錄</button>
+    </div>
+  );
+}
+
+function AlertsView({policies,alerts,today}) {
+  const expired=policies.filter(p=>p.status==="expired");
+  const voided=policies.filter(p=>p.status==="claimed_void");
+  return (
+    <div>
+      <div style={{background:alerts.length?C.redBg:C.greenBg,borderRadius:12,padding:14,marginBottom:12,textAlign:"center",color:alerts.length?C.red:C.green,fontSize:14,fontWeight:600,border:`1px solid ${alerts.length?"#ddbcbc":"#bcd4bf"}`}}>
+        {alerts.length?`⚠ 有 ${alerts.length} 張保單即將到期`:"✓ 近期無到期提醒"}
+      </div>
+      {alerts.length>0&&<Sec title="即將到期（30 天內）">
+        {alerts.map(p=>{
+          const d=new Date(p.reminder_date); d.setHours(0,0,0,0);
+          const diff=Math.ceil((d-today)/86400000);
+          return (
+            <div key={p.id} style={{background:C.redBg,borderRadius:10,padding:12,marginBottom:8,borderLeft:`3px solid ${C.red}`}}>
+              <div style={{fontWeight:700,color:C.text}}>{p.company}　{p.insured_name}</div>
+              <div style={{fontSize:12,color:C.sub,marginTop:2}}>{tlabel(p.main_type,p.main_type_custom)}</div>
+              <div style={{fontSize:13,color:C.red,marginTop:4,fontWeight:600}}>{diff<=0?"已逾提醒日":`還有 ${diff} 天`}　·　{p.reminder_date}</div>
+            </div>
+          );
+        })}
+      </Sec>}
+      <Sec title="已到期保單">
+        {expired.length===0?<Muted>無</Muted>:expired.map(p=><AlertRow key={p.id} p={p} color={C.amber}/>)}
+      </Sec>
+      <Sec title="理賠後失效保單">
+        {voided.length===0?<Muted>無</Muted>:voided.map(p=><AlertRow key={p.id} p={p} color={C.red}/>)}
+      </Sec>
+    </div>
+  );
+}
+
+function AlertRow({p,color}) {
+  return (
+    <div style={{borderLeft:`3px solid ${color}`,paddingLeft:10,marginBottom:8}}>
+      <div style={{fontWeight:600,fontSize:14,color:C.text}}>{p.company||"—"}　·　{p.insured_name||"—"}</div>
+      <div style={{fontSize:12,color:C.sub}}>{tlabel(p.main_type,p.main_type_custom)}{p.end_date?`　到期 ${p.end_date}`:""}</div>
+    </div>
+  );
+}
+
+function SummaryView({policies,claims,persons,summaryPerson,setSummaryPerson}) {
+  const fp=summaryPerson==="all"?policies:policies.filter(p=>p.insured_name===summaryPerson);
+  const activeLife=fp.filter(p=>p.kind==="life"&&p.status==="active");
+  const activeProd=fp.filter(p=>p.kind==="prod"&&p.status==="active");
+  const sums={};
+  activeLife.forEach(p=>{
+    const addCov=(cov,cf)=>{
+      Object.entries(cov||{}).forEach(([k,v])=>{if(k==="copy_claim")return;const n=parseFloat(v);if(!isNaN(n)&&n>0)sums[k]=(sums[k]||0)+n;});
+      (cf||[]).forEach(f=>{if(f.label&&f.value){const n=parseFloat(f.value);if(!isNaN(n)&&n>0)sums[f.label]=(sums[f.label]||0)+n;}});
+    };
+    addCov(p.main_coverage,p.main_custom_fields);
+    (p.riders||[]).filter(r=>r.status==="active").forEach(r=>addCov(r.coverage,r.custom_fields));
+  });
+  const fc=summaryPerson==="all"?claims:claims.filter(c=>{const pol=policies.find(p=>p.id===c.policy_id);return pol&&pol.insured_name===summaryPerson;});
+  const lifeClaimsTotal=fc.filter(c=>c.category==="life").reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const prodClaimsTotal=fc.filter(c=>c.category==="prod").reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const byType={};
+  LIFE_TYPES.forEach(t=>{
+    const items=[];
+    activeLife.forEach(p=>{
+      if(p.main_type===t.id) items.push({name:p.insured_name,company:p.company,label:"主約"});
+      (p.riders||[]).filter(r=>r.status==="active"&&r.type===t.id).forEach(()=>items.push({name:p.insured_name,company:p.company,label:"附約"}));
+    });
+    if(items.length) byType[t.label]={color:TYPE_COLORS[t.id],items};
+  });
+  return (
+    <div>
+      <div style={{background:C.white,borderRadius:13,padding:14,marginBottom:12,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:11,color:C.sub,marginBottom:6,letterSpacing:.3}}>篩選被保險人</div>
+        <select value={summaryPerson} onChange={e=>setSummaryPerson(e.target.value)} style={{...IS}}>
+          <option value="all">全部成員</option>
+          {persons.map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <StatCard icon="💊" label="有效壽健險" value={activeLife.length} unit="張" color={C.accent}/>
+        <StatCard icon="🚗" label="有效產險" value={activeProd.length} unit="張" color={C.amber}/>
+        <StatCard icon="📑" label="壽健險理賠" value={lifeClaimsTotal.toLocaleString()} unit="元" color={C.green}/>
+        <StatCard icon="📑" label="產險理賠" value={prodClaimsTotal.toLocaleString()} unit="元" color={C.blue}/>
+      </div>
+      {Object.keys(sums).length>0&&(
+        <div style={{background:C.white,borderRadius:13,padding:16,marginBottom:12,border:`1px solid ${C.border}`}}>
+          <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:2}}>壽健險保障加總</div>
+          <div style={{fontSize:11,color:C.muted,marginBottom:10}}>主約＋有效附約，跨保司合計</div>
+          {Object.entries(sums).map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:14}}>
+              <span style={{color:C.sub}}>{SUMMARY_LABELS[k]||k}</span>
+              <span style={{fontWeight:700,color:C.text}}>{v.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{background:C.white,borderRadius:13,padding:16,marginBottom:12,border:`1px solid ${C.border}`}}>
+        <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>壽健險　險種分佈</div>
+        {Object.keys(byType).length===0&&<Muted>無有效壽健險資料</Muted>}
+        {Object.entries(byType).map(([label,{color,items}])=>(
+          <div key={label} style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:color,display:"inline-block"}}></span>
+              <span style={{fontWeight:700,fontSize:13,color}}>{label}</span>
+              <span style={{fontSize:11,color:C.muted}}>（{items.length}）</span>
+            </div>
+            {items.map((r,i)=>(
+              <div key={i} style={{background:C.bg,borderRadius:9,padding:"7px 12px",marginBottom:4,fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:C.text}}>{r.name||"—"}<span style={{color:C.muted,marginLeft:4}}>· {r.company||"—"}</span></span>
+                <span style={{fontSize:11,color,fontWeight:600,background:color+"18",borderRadius:5,padding:"2px 7px"}}>{r.label}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{background:C.accentBg,borderRadius:13,padding:14,fontSize:13,color:C.accentDark,border:`1px solid ${C.border2}`,marginBottom:8}}>
+        <div style={{fontWeight:700,marginBottom:8,fontSize:14}}>保障健診提醒</div>
+        {["外幣保單請注意匯率風險","定期附約注意續保年齡上限","實支實付確認是否可副本理賠","產險每年到期記得續保","建議每年重新檢視保障缺口"].map(t=>(
+          <div key={t} style={{marginBottom:4,display:"flex",gap:6}}><span style={{color:C.accent}}>·</span>{t}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Shared UI ────────────────────────────────────────────────────────────────
+const IS={padding:"9px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,fontSize:14,outline:"none",background:C.white,color:C.text,width:"100%",boxSizing:"border-box",display:"block"};
+function Sec({title,children}){ return <div style={{background:C.white,borderRadius:13,padding:16,marginBottom:12,border:`1px solid ${C.border}`}}><div style={{fontWeight:700,fontSize:12,color:C.sub,marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${C.border}`,letterSpacing:.8}}>{title}</div>{children}</div>; }
+function F({label,value,onChange,ph,type="text"}){ return <div style={{marginBottom:10}}><div style={{fontSize:11,color:C.sub,marginBottom:4,letterSpacing:.3}}>{label}</div><input type={type} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={ph} style={IS}/></div>; }
+function FS({label,value,onChange,opts}){ return <div style={{marginBottom:10}}><div style={{fontSize:11,color:C.sub,marginBottom:4,letterSpacing:.3}}>{label}</div><select value={value} onChange={e=>onChange(e.target.value)} style={IS}>{opts.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>; }
+function Row({children}){ return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{children}</div>; }
+function Chip({children}){ return <span style={{background:C.accentBg,borderRadius:7,padding:"3px 9px",fontSize:11,color:C.sub}}>{children}</span>; }
+function StatCard({icon,label,value,unit,color}){ return <div style={{background:C.white,borderRadius:13,padding:"14px 10px",border:`1px solid ${C.border}`,textAlign:"center"}}><div style={{fontSize:22}}>{icon}</div><div style={{fontSize:19,fontWeight:800,color,marginTop:4}}>{value}</div><div style={{fontSize:10,color:C.muted}}>{unit}</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>{label}</div></div>; }
+function Empty({icon,text}){ return <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}><div style={{fontSize:44}}>{icon}</div><div style={{marginTop:12,fontSize:14}}>{text}</div></div>; }
+function Muted({children}){ return <div style={{color:C.muted,fontSize:13}}>{children}</div>; }
+function Modal({onClose,children}){ return <div style={{position:"fixed",inset:0,background:"#2a1e1655",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}><div style={{background:C.white,borderRadius:16,padding:24,maxWidth:300,width:"90%",border:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>{children}</div></div>; }
+function Btn({children,onClick,danger,ghost}){ return <button onClick={onClick} style={{flex:1,padding:"10px 0",borderRadius:9,border:ghost?`1px solid ${C.border}`:"none",background:danger?C.red:ghost?C.white:C.accent,color:danger||!ghost?C.white:C.text,cursor:"pointer",fontWeight:600,fontSize:14}}>{children}</button>; }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
