@@ -22,15 +22,24 @@
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);
 }
-html,body{height: -webkit-fill-available;overflow:hidden;background-color:var(--header);font-family:'Noto Sans TC','Helvetica Neue',Arial,sans-serif;color:var(--text);margin: 0;padding: 0;}
+html,body{height: 100%;height: -webkit-fill-available;min-height: 100%;
+  overflow: hidden;
+  background: var(--bg); /* 讓背景色與 App 一致，減少跳色感 */
+  font-family: 'Noto Sans TC','Helvetica Neue',Arial,sans-serif;
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+}
 #app{display: flex;
   flex-direction: column;
   /* 確保高度填滿整個可用區域 */
   height: 100vh;
   height: -webkit-fill-available;
-  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--bg);
   position: relative;
-  background: var(--bg);}
+  overflow: hidden;}
 
 /* TopBar */
 #topbar{background:var(--header);color:var(--white);padding:calc(12px + var(--safe-top)) 16px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index: 101;}
@@ -41,24 +50,26 @@ html,body{height: -webkit-fill-available;overflow:hidden;background-color:var(--
 #topbar-add{background:var(--accent-dark);border:none;color:var(--white);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-weight:600;}
 
 /* Content */
-#content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;padding-bottom:calc(80px + env(safe-area-inset-bottom));}
+#content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px));}
 
 /* BottomNav */
-#bottomnav{position: fixed;
+#bottomnav{background: var(--white);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  
+  /* 關鍵修改點：改為固定定位，確保背景延伸到底部 */
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  
-  background: var(--white);
-  border-top: 1px solid var(--border);
-  display: flex;
-  
-  /* 關鍵：使用 env(safe-area-inset-bottom) 自動計算 iPhone 底部橫條高度 */
-  padding-bottom: env(safe-area-inset-bottom);
-  
-  /* 確保導航欄總高度包含安全區域 */
-  height: calc(60px + env(safe-area-inset-bottom));
+  width: 100%;
+  max-width: 480px; /* 保持與 #app 一致 */
+  margin: 0 auto !important;
   z-index: 100;
+
+  /* 處理 iPhone 底部安全區：將內容往上推，但背景色會留著 */
+  padding-bottom: env(safe-area-inset-bottom, 12px);
 }
 
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 0 6px;border:none;background:none;cursor:pointer;position:relative;}
