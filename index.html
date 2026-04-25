@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="保障管理"/>
@@ -22,8 +22,15 @@
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);
 }
-html,body{height:100％;height: -webkit-fill-available;overflow:hidden;background:#ffffff;font-family:'Noto Sans TC','Helvetica Neue',Arial,sans-serif;color:var(--text);margin: 0;padding: 0;}
-#app{display:flex;flex-direction:column;height:100dvh;height: -webkit-fill-available;max-width:480px;margin:0 auto;background:var(--bg);position: relative; /* 增加這行確保定位穩定 */}
+html,body{height: -webkit-fill-available;overflow:hidden;background-color:var(--header);font-family:'Noto Sans TC','Helvetica Neue',Arial,sans-serif;color:var(--text);margin: 0;padding: 0;}
+#app{display: flex;
+  flex-direction: column;
+  /* 確保高度填滿整個可用區域 */
+  height: 100vh;
+  height: -webkit-fill-available;
+  width: 100%;
+  position: relative;
+  background: var(--bg);}
 
 /* TopBar */
 #topbar{background:var(--header);color:var(--white);padding:calc(12px + var(--safe-top)) 16px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index: 101;}
@@ -34,22 +41,23 @@ html,body{height:100％;height: -webkit-fill-available;overflow:hidden;backgroun
 #topbar-add{background:var(--accent-dark);border:none;color:var(--white);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-weight:600;}
 
 /* Content */
-#content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;padding-bottom:calc(70px + env(safe-bottom));}
+#content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;padding-bottom:calc(80px + env(safe-area-inset-bottom));}
 
 /* BottomNav */
-#bottomnav{background: var(--white);
-  border-top: 1px solid var(--border);
-  display: flex;
-  position: fixed;
+#bottomnav{position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  /* 關鍵：padding-bottom 使用安全區域，確保按鈕在橫條上方 */
-  padding-bottom: var(--safe-bottom);
-  height: calc(60px + var(--safe-bottom));
+  
+  background: var(--white);
+  border-top: 1px solid var(--border);
+  display: flex;
+  
+  /* 關鍵：使用 env(safe-area-inset-bottom) 自動計算 iPhone 底部橫條高度 */
+  padding-bottom: env(safe-area-inset-bottom);
+  
+  /* 確保導航欄總高度包含安全區域 */
+  height: calc(60px + env(safe-area-inset-bottom));
   z-index: 100;
 }
 
