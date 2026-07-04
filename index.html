@@ -25,13 +25,12 @@
 html,body{height: 100%;
   height: -webkit-fill-available;
   overflow: hidden;
-  background: var(--bg); /* 改回背景色，這樣不會有一條白邊感 */
+  background: var(--bg);
   margin: 0;
   padding: 0;
 }
 #app{display: flex;
   flex-direction: column;
-  /* 確保高度填滿整個可用區域 */
   height: 100vh;
   height: -webkit-fill-available;
   max-width: 480px;
@@ -42,6 +41,7 @@ html,body{height: 100%;
 
 /* TopBar */
 #topbar{background:var(--header);color:var(--white);padding:calc(12px + var(--safe-top)) 16px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index: 101;}
+#topbar-main").style.display=isEdit?"none":"block";
 #topbar-title{font-size:16px;font-weight:700;letter-spacing:.5px;}
 #topbar-sub{font-size:10px;opacity:.5;letter-spacing:1.5px;margin-top:1px;}
 #topbar-back{background:none;border:none;color:#d4c4b8;font-size:22px;cursor:pointer;display:flex;align-items:center;gap:6px;padding:0;}
@@ -53,27 +53,20 @@ html,body{height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 12px 14px;
-  /* 預留剛好超過導航欄的高度即可 */
   padding-bottom: 80px;}
 
 /* BottomNav */
 #bottomnav{background: var(--white);
   border-top: 1px solid var(--border);
   display: flex;
-  
-  /* 關鍵修改點：改為固定定位，確保背景延伸到底部 */
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   width: 100%;
-  max-width: 480px; /* 保持與 #app 一致 */
+  max-width: 480px;
   margin: 0 auto !important;
   z-index: 1000;
-
-  /* 處理 iPhone 底部安全區：將內容往上推，但背景色會留著 */
-  padding-bottom: padding-bottom: 0; 
-  /* 強制固定高度，不隨安全區變動 */
   height: 65px;
 }
 
@@ -82,8 +75,8 @@ html,body{height: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0; /* 移除 padding 讓它完全由高度控制 */
-  height: 100%; /* 撐滿導航欄的 65px */
+  padding: 0;
+  height: 100%;
   border: none;
   background: none;
   cursor: pointer;
@@ -130,11 +123,13 @@ html,body{height: 100%;
 .main-row{background:var(--accent-bg);border-radius:9px;padding:8px 12px;display:flex;align-items:center;gap:8px;margin-top:10px;}
 .main-tag{border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;}
 .main-label{font-size:13px;font-weight:600;}
+.main-prod-name{font-size:12px;color:var(--accent-dark);font-style:italic;}
 .main-type{font-size:11px;color:var(--sub);margin-left:auto;}
 .rider-toggle{width:100%;margin-top:8px;padding:7px 0;border-radius:9px;border:1px dashed var(--border2);background:none;cursor:pointer;font-size:12px;color:var(--sub);display:flex;align-items:center;justify-content:center;gap:5px;}
 .riders-list{margin-top:8px;display:flex;flex-direction:column;gap:7px;}
 .rider-row{border-left:3px solid;padding-left:10px;display:flex;align-items:center;justify-content:space-between;}
 .rider-name{font-size:13px;font-weight:600;}
+.rider-prod{font-size:11px;color:var(--accent-dark);font-style:italic;}
 .rider-sub{font-size:11px;color:var(--muted);}
 .rider-status{font-size:11px;font-weight:600;}
 .card-footer{display:flex;border-top:1px solid var(--border);}
@@ -315,7 +310,6 @@ const CF={
 };
 const SL={daily_hosp:"住院日額（元/日）",icu_daily:"加護病房日額（元/日）",surgery:"手術費用（元）",misc_limit:"雜費上限（萬）",expense_limit:"費用上限（萬）",death_benefit:"身故保險金（萬）",disability_benefit:"失能保險金（萬）",diagnosis_lumpsum:"初次罹癌一次金（萬）",monthly_benefit:"月給付（元/月）",lumpsum:"一次金（萬）"};
 
-// ── State ────────────────────────────────────────────────────────────────────
 // ── State & API ──────────────────────────────────────────────────────────────
 const API_URL = "https://script.google.com/macros/s/AKfycbyQfd36yMkvRNp9nu4Sd05zqHRJWNQD6fSPks180T9rXJKJmT-aQLaHMekQm6p_zUiE/exec"; // <--- 這裡貼上你的網址
 
@@ -336,7 +330,7 @@ let state={
 let policies = [];
 let claims = [];
 
-// 新增：從雲端抓取資料並渲染
+// 從雲端抓取資料並渲染
 async function initApp() {
   const contentEl = document.getElementById("content");
   contentEl.innerHTML = '<div class="empty"><div class="empty-text">同步雲端資料中...</div></div>';
@@ -346,33 +340,28 @@ async function initApp() {
     const data = await resp.json();
     policies = data.policies || [];
     claims = data.claims || [];
-    render(); // 抓到資料後才第一次渲染介面
+    render();
   } catch (e) {
     console.error("讀取失敗:", e);
-    // 如果失敗，嘗試讀取上次儲存的本機備份
     policies = JSON.parse(localStorage.getItem("ins_v4_backup_p") || "[]");
     claims = JSON.parse(localStorage.getItem("ins_v4_backup_c") || "[]");
     render();
   }
 }
 
-// 新增：同步資料到 Google Sheets
+// 同步資料到 Google Sheets
 async function syncToServer() {
-  // 同步時顯示一個簡單的 Log（你也可以在 UI 上做更明顯的提示）
   console.log("同步中...");
-  
-  // 同時存一份在手機本地，以防萬一
   localStorage.setItem("ins_v4_backup_p", JSON.stringify(policies));
   localStorage.setItem("ins_v4_backup_c", JSON.stringify(claims));
 
   await fetch(API_URL, {
     method: 'POST',
-    mode: 'no-cors', // 避免跨網域問題
+    mode: 'no-cors',
     body: JSON.stringify({ policies, claims })
   });
 }
 
-// 修改原本的儲存函式，讓它們觸發雲端同步
 function savePolicies() {
   syncToServer();
   render();
@@ -383,17 +372,16 @@ function saveClaims() {
   render();
 }
 
-
-
 function uid(){return Date.now()+Math.floor(Math.random()*10000);}
 
+// 關鍵優化 1：讓自訂險種名稱能夠直接返回，不用通通變「其他」
 function tlabel(type,custom){
-  if(type==="life_other"||type==="prod_other") return custom||"其他";
-  return [...LIFE_TYPES,...PROD_TYPES].find(t=>t.id===type)?.label||type;
+  if((type==="life_other"||type==="prod_other") && custom) return custom;
+  return [...LIFE_TYPES,...PROD_TYPES].find(t=>t.id===type)?.label||custom||"其他";
 }
 
-function emptyRider(){return {id:uid(),type:"medical",type_custom:"",term_type:"終身",coverage_age:"",coverage:{},custom_fields:[],status:"active"};}
-function emptyPolicy(kind){return {id:uid(),kind,company:"",policy_number:"",policy_holder:"",insured_name:"",beneficiary:"",start_date:"",end_date:"",reminder_date:"",payment_period:"",currency:"TWD",premium_note:"",status:"active",notes:"",main_type:kind==="life"?"life":"car_compulsory",main_type_custom:"",main_term_type:kind==="life"?"終身":"一年期",main_coverage_age:"",main_coverage:{},main_custom_fields:[],riders:[]};}
+function emptyRider(){return {id:uid(),type:"medical",type_custom:"",prod_name:"",premium:"",term_type:"終身",coverage_age:"",coverage:{},custom_fields:[],status:"active"};}
+function emptyPolicy(kind){return {id:uid(),kind,company:"",policy_number:"",policy_holder:"",insured_name:"",beneficiary:"",start_date:"",end_date:"",reminder_date:"",payment_period:"",currency:"TWD",premium_note:"",payer:"",payment_method:"",payment_bank:"",status:"active",notes:"",main_type:kind==="life"?"life":"car_compulsory",main_type_custom:"",main_prod_name:"",main_premium:"",main_term_type:kind==="life"?"終身":"一年期",main_coverage_age:"",main_coverage:{},main_custom_fields:[],riders:[]};}
 
 // ── Routing ──────────────────────────────────────────────────────────────────
 function switchTab(tab){
@@ -421,7 +409,6 @@ function onAddClick(){
   render();
 }
 
-// ── Today helper ─────────────────────────────────────────────────────────────
 function today(){const d=new Date();d.setHours(0,0,0,0);return d;}
 function getAlerts(){
   const t=today();
@@ -483,18 +470,31 @@ function updateNavBar(){
 
 // ── Policy List ──────────────────────────────────────────────────────────────
 function renderPolicyList(kind){
-  const list=policies.filter(p=>p.kind===kind);
-  const filtered=list.filter(p=>{
-    const txt=[p.insured_name,p.company,p.policy_number,tlabel(p.main_type,p.main_type_custom)].join(" ").toLowerCase();
-    return txt.includes(state.search.toLowerCase())&&(state.filterStatus==="all"||p.status===state.filterStatus);
-  });
+  let html=`<div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="search-input" placeholder="搜尋被保險人、公司、保單號碼、商品名稱…" value="${esc(state.search)}"/></div>`;
+  
   const statuses=[["all","全部"],["active","有效"],["expired","已到期"],["claimed_void","理賠失效"]];
-  let html=`<div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="search-input" placeholder="搜尋被保險人、公司、保單號碼…" value="${esc(state.search)}"/></div>`;
   html+=`<div class="filter-row">`;
   statuses.forEach(([v,l])=>html+=`<button class="filter-pill${state.filterStatus===v?" active":""}" onclick="setFilter('${v}')">${l}</button>`);
   html+=`</div>`;
-  if(filtered.length===0) html+=`<div class="empty"><div class="empty-icon">${kind==="life"?"💊":"🚗"}</div><div class="empty-text">尚無保單，點右上角新增</div></div>`;
-  filtered.forEach(p=>html+=renderPolicyCard(p));
+  
+  html+=`<div id="policy-cards-container">`;
+  html+=renderFilteredCards(kind);
+  html+=`</div>`;
+  return html;
+}
+
+// 關鍵優化 5：將卡片獨立渲染，搜尋時不重刷整個頁面，完美解決輸入跳開與卡頓
+function renderFilteredCards(kind) {
+  const list = policies.filter(p => p.kind === kind);
+  const filtered = list.filter(p => {
+    const txt = [p.insured_name, p.company, p.policy_number, p.main_prod_name, tlabel(p.main_type, p.main_type_custom)].join(" ").toLowerCase();
+    return txt.includes(state.search.toLowerCase()) && (state.filterStatus === "all" || p.status === state.filterStatus);
+  });
+  
+  if (filtered.length === 0) return `<div class="empty"><div class="empty-icon">${kind === "life" ? "💊" : "🚗"}</div><div class="empty-text">無符合條件的保單</div></div>`;
+  
+  let html = "";
+  filtered.forEach(p => html += renderPolicyCard(p));
   return html;
 }
 
@@ -515,22 +515,42 @@ function renderPolicyCard(p){
   const isOpen=state.riderOpen[p.id];
   let html=`<div class="policy-card${p.status!=="active"?" inactive":""}">`;
   html+=`<div class="card-body" style="border-left:4px solid ${mc}">`;
-  html+=`<div class="card-header"><div><div class="card-company">${esc(p.company)||"（未填保險公司）"}</div><div class="card-num">${p.policy_number?"保單號碼　"+esc(p.policy_number):"—"}</div></div>`;
+  html+=`<div class="card-header"><div><div class="card-company">${esc(p.company)||"（未填保險公司）"}</div><div class="card-num">${p.policy_number?"保單號碼 "+esc(p.policy_number):"—"}</div></div>`;
   html+=`<span class="status-badge" style="background:${st.bg};color:${st.c}">${st.l}</span></div>`;
-  html+=`<div class="chips"><span class="chip">👤 ${esc(p.insured_name)||"未填"}</span><span class="chip">💱 ${p.currency}</span>`;
-  if(p.start_date) html+=`<span class="chip">🗓 ${p.start_date}</span>`;
+  html+=`<div class="chips"><span class="chip">👤 險人：${esc(p.insured_name)||"未填"}</span><span class="chip">💱 ${p.currency}</span>`;
+  if(p.payer) html+=`<span class="chip">💳 付款：${esc(p.payer)}</span>`;
   if(remind) html+=`<span class="chip chip-warn">⚠ ${remind}</span>`;
   html+=`</div>`;
-  html+=`<div class="main-row"><span class="main-tag" style="background:${mc}">主約</span><span class="main-label">${esc(tlabel(p.main_type,p.main_type_custom))}</span><span class="main-type">${p.main_term_type}</span></div>`;
+  
+  // 顯示主約商品名稱與保費
+  html+=`<div class="main-row">
+    <span class="main-tag" style="background:${mc}">主約</span>
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <span class="main-label">${esc(tlabel(p.main_type, p.main_type_custom))}</span>
+      ${p.main_prod_name ? `<span class="main-prod-name">🏷️ ${esc(p.main_prod_name)}</span>` : ''}
+    </div>
+    <span class="main-type">${p.main_premium ? parseFloat(p.main_premium).toLocaleString() + ' ' + p.currency : p.main_term_type}</span>
+  </div>`;
+  
   if(riders.length>0){
-    html+=`<button class="rider-toggle" onclick="toggleRider('${p.id}')"><span>${isOpen?"▲":"▼"}</span>附約　${activeRiders.length} 個有效${riders.length>activeRiders.length?`（共 ${riders.length} 個）`:""}</button>`;
+    html+=`<button class="rider-toggle" onclick="toggleRider('${p.id}')"><span>${isOpen?"▲":"▼"}</span>附約 ${activeRiders.length} 個有效${riders.length>activeRiders.length?`（共 ${riders.length} 個）`:""}</button>`;
     if(isOpen){
       html+=`<div class="riders-list">`;
       riders.forEach(r=>{
         const rc=TC[r.type]||"var(--accent)";
         const rsC=r.status==="active"?"var(--green)":r.status==="expired"?"var(--amber)":"var(--red)";
-        const rsL=r.status==="active"?"有效":r.status==="expired"?"到期":"失效";
-        html+=`<div class="rider-row" style="border-left-color:${rc}"><div><div class="rider-name">${esc(tlabel(r.type,r.type_custom))}</div><div class="rider-sub">${r.term_type}${r.coverage_age?` · 保至 ${r.coverage_age} 歲`:""}</div></div><span class="rider-status" style="color:${rsC}">${rsL}</span></div>`;
+        const rsL=r.status==="active"?"有效":r.status==="expired"?"到期全":"失效";
+        html+=`<div class="rider-row" style="border-left-color:${rc}">
+          <div>
+            <div class="rider-name">${esc(tlabel(r.type,r.type_custom))}</div>
+            ${r.prod_name ? `<div class="rider-prod">🏷️ ${esc(r.prod_name)}</div>` : ''}
+            <div class="rider-sub">${r.term_type}${r.coverage_age?` · 保至 ${r.coverage_age} 歲`:""}</div>
+          </div>
+          <div style="text-align:right">
+            <span class="rider-status" style="color:${rsC}">${rsL}</span>
+            ${r.premium ? `<div style="font-size:11px; color:var(--sub); margin-top:2px;">${parseFloat(r.premium).toLocaleString()}</div>` : ''}
+          </div>
+        </div>`;
       });
       html+=`</div>`;
     }
@@ -547,39 +567,56 @@ function renderEditView(){
   const isLife=p.kind==="life";
   const typeList=isLife?LIFE_TYPES:PROD_TYPES;
   let html=``;
-  // Basic
+  
+  // Basic Info
   html+=`<div class="sec"><div class="sec-title">保單基本資料</div>`;
   html+=fld("保險公司","company","text",p.company,"例：國泰人壽");
   html+=fld("保單號碼","policy_number","text",p.policy_number,"保單號碼");
   html+=fld("要保人","policy_holder","text",p.policy_holder,"姓名");
   html+=fld("被保險人","insured_name","text",p.insured_name,"姓名");
   if(isLife) html+=fld("受益人","beneficiary","text",p.beneficiary,"姓名或法定繼承人");
+  
   html+=`<div class="field-row">`;
   html+=fldSel("幣別","currency",CURRENCIES.map(c=>({v:c,l:c})),p.currency);
   html+=fldSel("保單狀態","status",[{v:"active",l:"有效"},{v:"expired",l:"已到期"},{v:"claimed_void",l:"理賠後失效"}],p.status);
   html+=`</div>`;
-  html+=fld("保費備註","premium_note","text",p.premium_note,"例：年繳 $18,000，第 6 年起調整");
+  
+  // 優化 4：新增扣款與付款明細欄位
+  html+=`<div class="field-row">`;
+  html+=fld("付款付款人","payer","text",p.payer||"","例：媽媽");
+  html+=fld("扣款方式","payment_method","text",p.payment_method||"","例：信用卡 / 銀行扣款");
+  html+=`</div>`;
+  html+=fld("扣款銀行 / 卡號簡稱","payment_bank","text",p.payment_bank||"","例：台新 FlyGo 卡 / 國泰世華");
+  
+  html+=fld("保費繳費備註","premium_note","text",p.premium_note,"例：年繳 $18,000，第 6 年起調整");
   html+=`<div class="field-row">`+fld("承保日","start_date","date",p.start_date,"")+fld("到期日","end_date","date",p.end_date,"")+`</div>`;
   html+=fld("🔔 提醒日","reminder_date","date",p.reminder_date,"");
   if(isLife) html+=fld("繳費期間","payment_period","text",p.payment_period,"例：20 年期 / 繳至 65 歲");
   html+=`</div>`;
-  // Main
+  
+  // Main Contract Block
   html+=`<div class="main-contract-box"><div class="main-contract-header"><span class="main-contract-tag">主約</span><span style="font-weight:700;font-size:13px;">主要契約</span></div>`;
   html+=fldSel("險種","main_type",typeList.map(t=>({v:t.id,l:t.label})),p.main_type,true);
-  if(p.main_type==="life_other"||p.main_type==="prod_other") html+=fld("自定險種名稱","main_type_custom","text",p.main_type_custom,"請輸入險種名稱");
+  if(p.main_type==="life_other"||p.main_type==="prod_other") html+=fld("自定險種名稱","main_type_custom","text",p.main_type_custom,"請輸入自訂險種名稱");
+  
+  // 優化 2 & 3：新增商品名稱與保費金額
+  html+=fld("保險商品名稱","main_prod_name","text",p.main_prod_name||"","例：醫卡讚重大傷病險");
+  html+=fld("保費金額 (每期)","main_premium","number",p.main_premium||"","請輸入純數字金額");
+  
   html+=`<div class="field-row">`;
   html+=fldSel("保障類型","main_term_type",(isLife?["終身","定期"]:["一年期","多年期"]).map(v=>({v,l:v})),p.main_term_type);
   if(isLife) html+=fld("保障最高年齡","main_coverage_age","text",p.main_coverage_age,"例：99 歲");
   html+=`</div>`;
   html+=renderCovFields("main",p.main_type,p.main_coverage||{},p.main_custom_fields||[]);
   html+=`</div>`;
-  // Riders
+  
+  // Riders Block
   if(isLife){
     html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span style="font-weight:700;font-size:14px;">附約列表</span><button class="btn-add-rider" onclick="addRider()">＋ 新增附約</button></div>`;
     if((p.riders||[]).length===0) html+=`<div class="sec" style="text-align:center;color:var(--muted);font-size:13px;border-style:dashed">尚無附約，點右上角新增</div>`;
     (p.riders||[]).forEach((r,i)=>html+=renderRiderEditor(r,i));
   }
-  // Notes
+  
   html+=`<div class="sec"><div class="sec-title">備註</div><div class="field"><textarea id="notes" oninput="updateField('notes',this.value)">${esc(p.notes)}</textarea></div></div>`;
   html+=`<button class="btn-save" onclick="savePolicy()">儲存保單</button>`;
   return html;
@@ -598,7 +635,12 @@ function renderRiderEditor(r,i){
   if(isOpen){
     html+=`<div class="rider-content">`;
     html+=fldSel("險種","rider_type_"+r.id,LIFE_TYPES.map(t=>({v:t.id,l:t.label})),r.type,false,`updateRiderField('${r.id}','type',this.value)`);
-    if(r.type==="life_other") html+=fldInp("自定名稱","rider_custom_"+r.id,"text",r.type_custom,"險種名稱",`updateRiderField('${r.id}','type_custom',this.value)`);
+    if(r.type==="life_other") html+=fldInp("自定名稱","rider_custom_"+r.id,"text",r.type_custom,"自訂險種名稱",`updateRiderField('${r.id}','type_custom',this.value)`);
+    
+    // 優化 2 & 3：新增附約商品名稱與保費
+    html+=fldInp("保險商品名稱","rider_prod_name_"+r.id,"text",r.prod_name||"","例：實支實付醫療特約",`updateRiderField('${r.id}','prod_name',this.value)`);
+    html+=fldInp("保費金額 (每期)","rider_premium_"+r.id,"number",r.premium||"","請輸入純數字金額",`updateRiderField('${r.id}','premium',this.value)`);
+    
     html+=`<div class="field-row">`;
     html+=fldSel("保障類型","rider_term_"+r.id,["終身","定期"].map(v=>({v,l:v})),r.term_type,false,`updateRiderField('${r.id}','term_type',this.value)`);
     html+=fldInp("保障最高年齡","rider_age_"+r.id,"text",r.coverage_age,"例：75 歲",`updateRiderField('${r.id}','coverage_age',this.value)`);
@@ -691,28 +733,30 @@ function renderAlertsView(){
     alerts.forEach(p=>{
       const d=new Date(p.reminder_date);d.setHours(0,0,0,0);
       const diff=Math.ceil((d-t)/86400000);
-      html+=`<div class="alert-item"><div class="alert-company">${esc(p.company)}　${esc(p.insured_name)}</div><div class="alert-type">${esc(tlabel(p.main_type,p.main_type_custom))}</div><div class="alert-days">${diff<=0?"已逾提醒日":`還有 ${diff} 天`}　·　${p.reminder_date}</div></div>`;
+      html+=`<div class="alert-item"><div class="alert-company">${esc(p.company)} ${esc(p.insured_name)}</div><div class="alert-type">${esc(tlabel(p.main_type,p.main_type_custom))}</div><div class="alert-days">${diff<=0?"已逾提醒日全":`還有 ${diff} 天`} · ${p.reminder_date}</div></div>`;
     });
     html+=`</div>`;
   }
   html+=`<div class="sec"><div class="sec-title">已到期保單</div>`;
   if(!expired.length) html+=`<div style="color:var(--muted);font-size:13px">無</div>`;
-  expired.forEach(p=>html+=`<div class="alert-row" style="border-left-color:var(--amber)"><div class="alert-row-company">${esc(p.company||"—")}　·　${esc(p.insured_name||"—")}</div><div class="alert-row-type">${esc(tlabel(p.main_type,p.main_type_custom))}${p.end_date?"　到期 "+p.end_date:""}</div></div>`);
+  expired.forEach(p=>html+=`<div class="alert-row" style="border-left-color:var(--amber)"><div class="alert-row-company">${esc(p.company||"—")} · ${esc(p.insured_name||"—")}</div><div class="alert-row-type">${esc(tlabel(p.main_type,p.main_type_custom))}${p.end_date?" 到期全 "+p.end_date:""}</div></div>`);
   html+=`</div>`;
   html+=`<div class="sec"><div class="sec-title">理賠後失效保單</div>`;
   if(!voided.length) html+=`<div style="color:var(--muted);font-size:13px">無</div>`;
-  voided.forEach(p=>html+=`<div class="alert-row" style="border-left-color:var(--red)"><div class="alert-row-company">${esc(p.company||"—")}　·　${esc(p.insured_name||"—")}</div><div class="alert-row-type">${esc(tlabel(p.main_type,p.main_type_custom))}${p.end_date?"　到期 "+p.end_date:""}</div></div>`);
+  voided.forEach(p=>html+=`<div class="alert-row" style="border-left-color:var(--red)"><div class="alert-row-company">${esc(p.company||"—")} · ${esc(p.insured_name||"—")}</div><div class="alert-row-type">${esc(tlabel(p.main_type,p.main_type_custom))}${p.end_date?" 到期全 "+p.end_date:""}</div></div>`);
   html+=`</div>`;
   return html;
 }
 
-// ── Summary ──────────────────────────────────────────────────────────────────
+// ── Summary (保障總覽優化) ──────────────────────────────────────────────────────
 function renderSummaryView(){
   const persons=[...new Set(policies.map(p=>p.insured_name).filter(Boolean))];
   const sp=state.summaryPerson;
   const fp=sp==="all"?policies:policies.filter(p=>p.insured_name===sp);
   const activeLife=fp.filter(p=>p.kind==="life"&&p.status==="active");
   const activeProd=fp.filter(p=>p.kind==="prod"&&p.status==="active");
+  
+  // 計算保障額度加總
   const sums={};
   activeLife.forEach(p=>{
     const addCov=(cov,cf)=>{
@@ -722,51 +766,81 @@ function renderSummaryView(){
     addCov(p.main_coverage,p.main_custom_fields);
     (p.riders||[]).filter(r=>r.status==="active").forEach(r=>addCov(r.coverage,r.custom_fields));
   });
+
+  // 優化 3：年繳保費加總統計 (依幣別拆分計算)
+  const premiumSums = {};
+  fp.filter(p => p.status === "active").forEach(p => {
+    const cur = p.currency || "TWD";
+    premiumSums[cur] = premiumSums[cur] || 0;
+    if (p.main_premium) premiumSums[cur] += parseFloat(p.main_premium);
+    (p.riders || []).filter(r => r.status === "active").forEach(r => {
+      if (r.premium) premiumSums[cur] += parseFloat(r.premium);
+    });
+  });
+
   const fc=sp==="all"?claims:claims.filter(c=>{const pol=policies.find(p=>p.id===c.policy_id);return pol&&pol.insured_name===sp;});
   const lifeCTotal=fc.filter(c=>c.category==="life").reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
   const prodCTotal=fc.filter(c=>c.category==="prod").reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  
+  // 優化 1：讓自訂險種擁有獨立分組，不再歸類為模糊的「其他」
   const byType={};
-  LIFE_TYPES.forEach(t=>{
-    const items=[];
-    activeLife.forEach(p=>{
-      if(p.main_type===t.id) items.push({name:p.insured_name,company:p.company,label:"主約"});
-      (p.riders||[]).filter(r=>r.status==="active"&&r.type===t.id).forEach(()=>items.push({name:p.insured_name,company:p.company,label:"附約"}));
+  fp.filter(p => p.status === "active").forEach(p => {
+    // 檢查主約
+    const mLabel = tlabel(p.main_type, p.main_type_custom);
+    const mColor = TC[p.main_type] || "var(--accent)";
+    if (!byType[mLabel]) byType[mLabel] = { color: mColor, items: [] };
+    byType[mLabel].items.push({ name: p.insured_name, company: p.company, prod: p.main_prod_name, label: "主約" });
+    
+    // 檢查附約
+    (p.riders || []).filter(r => r.status === "active").forEach(r => {
+      const rLabel = tlabel(r.type, r.type_custom);
+      const rColor = TC[r.type] || "var(--accent)";
+      if (!byType[rLabel]) byType[rLabel] = { color: rColor, items: [] };
+      byType[rLabel].items.push({ name: p.insured_name, company: p.company, prod: r.prod_name, label: "附約" });
     });
-    if(items.length) byType[t.label]={color:TC[t.id],items};
   });
 
   let opts=`<option value="all"${sp==="all"?" selected":""}>全部成員</option>`;
   persons.forEach(n=>opts+=`<option value="${esc(n)}"${sp===n?" selected":""}>${esc(n)}</option>`);
   let html=`<div class="sec"><div style="font-size:11px;color:var(--sub);margin-bottom:6px">篩選被保險人</div><select style="width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid var(--border);font-size:14px;outline:none;background:var(--white);color:var(--text)" onchange="setSummaryPerson(this.value)">${opts}</select></div>`;
+  
   html+=`<div class="stats-grid">`;
   html+=`<div class="stat-card"><div class="stat-icon">💊</div><div class="stat-val" style="color:var(--accent)">${activeLife.length}</div><div class="stat-unit">張</div><div class="stat-label">有效壽健險</div></div>`;
   html+=`<div class="stat-card"><div class="stat-icon">🚗</div><div class="stat-val" style="color:var(--amber)">${activeProd.length}</div><div class="stat-unit">張</div><div class="stat-label">有效產險</div></div>`;
-  html+=`<div class="stat-card"><div class="stat-icon">📑</div><div class="stat-val" style="color:var(--green)">${lifeCTotal.toLocaleString()}</div><div class="stat-unit">元</div><div class="stat-label">壽健險理賠</div></div>`;
-  html+=`<div class="stat-card"><div class="stat-icon">📑</div><div class="stat-val" style="color:var(--blue)">${prodCTotal.toLocaleString()}</div><div class="stat-unit">元</div><div class="stat-label">產險理賠</div></div>`;
   html+=`</div>`;
+
+  // 渲染保費總計區塊
+  html += `<div class="sec"><div style="font-weight:700;font-size:14px;margin-bottom:8px">有效保單 · 年繳保費預估加總</div>`;
+  if (Object.keys(premiumSums).length === 0) {
+    html += `<div style="font-size:13px; color:var(--muted);">目前尚無輸入保費資料</div>`;
+  } else {
+    Object.entries(premiumSums).forEach(([cur, sum]) => {
+      html += `<div class="sum-row"><span class="sum-key">${cur} 總計</span><span class="sum-val" style="color:var(--amber); font-size:16px;">${sum.toLocaleString()} 元</span></div>`;
+    });
+  }
+  html += `</div>`;
+
   if(Object.keys(sums).length){
     html+=`<div class="sec"><div style="font-weight:700;font-size:14px;margin-bottom:2px">壽健險保障加總</div><div style="font-size:11px;color:var(--muted);margin-bottom:10px">主約＋有效附約，跨保司合計</div>`;
     Object.entries(sums).forEach(([k,v])=>html+=`<div class="sum-row"><span class="sum-key">${esc(SL[k]||k)}</span><span class="sum-val">${v.toLocaleString()}</span></div>`);
     html+=`</div>`;
   }
+  
   if(Object.keys(byType).length){
-    html+=`<div class="sec"><div style="font-weight:700;font-size:14px;margin-bottom:12px">壽健險　險種分佈</div>`;
+    html+=`<div class="sec"><div style="font-weight:700;font-size:14px;margin-bottom:12px">有效保單 險種與商品分佈</div>`;
     Object.entries(byType).forEach(([label,{color,items}])=>{
       html+=`<div class="type-group"><div class="type-group-header"><span class="type-dot" style="background:${color}"></span><span class="type-label" style="color:${color}">${esc(label)}</span><span class="type-count">（${items.length}）</span></div>`;
-      items.forEach(r=>html+=`<div class="type-item"><span>${esc(r.name||"—")}<span style="color:var(--muted);margin-left:4px">· ${esc(r.company||"—")}</span></span><span class="type-item-badge" style="color:${color};background:${color}22">${r.label}</span></div>`);
+      items.forEach(r=>html+=`<div class="type-item"><span>${esc(r.name||"—")}<span style="color:var(--muted);margin-left:4px">· ${esc(r.company||"—")} ${r.prod ? `(${esc(r.prod)})` : ''}</span></span><span class="type-item-badge" style="color:${color};background:${color}22">${r.label}</span></div>`);
       html+=`</div>`;
     });
     html+=`</div>`;
   }
-  html+=`<div class="tip-box"><div class="tip-title">保障健診提醒</div>`;
-  ["外幣保單請注意匯率風險","定期附約注意續保年齡上限","實支實付確認是否可副本理賠","產險每年到期記得續保","建議每年重新檢視保障缺口"].forEach(t=>html+=`<div class="tip-item"><span class="tip-dot">·</span>${t}</div>`);
-  html+=`</div>`;
   return html;
 }
 
 // ── Field helpers ────────────────────────────────────────────────────────────
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-function fld(label,id,type,val,ph){return `<div class="field"><label>${label}</label><input type="${type}" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" oninput="updateField('${id}',this.value${type==="date"?"":""})"/></div>`;}
+function fld(label,id,type,val,ph){return `<div class="field"><label>${label}</label><input type="${type}" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" oninput="updateField('${id}',this.value)"/></div>`;}
 function fldInp(label,id,type,val,ph,onchange){return `<div class="field"><label>${label}</label><input type="${type}" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" oninput="${onchange}"/></div>`;}
 function fldSel(label,id,opts,val,mainContract,onchange){
   const oc=onchange||`updateField('${id}',this.value${mainContract?",true":""})`;
@@ -778,10 +852,17 @@ function fldSel(label,id,opts,val,mainContract,onchange){
 // ── Event handlers ───────────────────────────────────────────────────────────
 function bindEvents(){
   const si=document.getElementById("search-input");
-  if(si) si.addEventListener("input",e=>{state.search=e.target.value;render();});
+  // 關鍵點：用獨立方法局部渲染列表卡片，避免搜尋時 input 焦點遺失跳開
+  if(si) si.addEventListener("input",e=>{
+    state.search=e.target.value;
+    const cardsContainer = document.getElementById("policy-cards-container");
+    if(cardsContainer) {
+      cardsContainer.innerHTML = renderFilteredCards(state.tab);
+    }
+  });
 }
 
-function setFilter(v){state.filterStatus=v;render();}
+function setFilter(v){state.filterStatus=v; render();}
 function setCatFilter(v){state.filterCat=v;render();}
 function setSummaryPerson(v){state.summaryPerson=v;render();}
 function toggleRider(pid){state.riderOpen[pid]=!state.riderOpen[pid];render();}
@@ -794,7 +875,7 @@ function toggleRiderEditor(rid){
 function updateField(key,val,isMainType){
   if(!state.editing) return;
   state.editing[key]=val;
-  if(isMainType) render(); // re-render coverage fields
+  if(isMainType) render();
 }
 
 function updateCovField(prefix,key,val){
@@ -812,7 +893,10 @@ function updateCovField(prefix,key,val){
 function updateRiderField(rid,key,val){
   if(!state.editing) return;
   const r=state.editing.riders.find(r=>String(r.id)===String(rid));
-  if(r){r[key]=val;if(key==="type"||key==="status")render();}
+  if(r){
+    r[key]=val;
+    if(key==="type"||key==="status") render();
+  }
 }
 
 function updateCF(prefix,i,field,val){
@@ -867,27 +951,29 @@ function removeRider(rid){
 function updateClaimField(key,val){if(state.editClaim) state.editClaim[key]=val;}
 
 function savePolicy(){
-  // collect all current input values from DOM before saving
   const p=state.editing;
-  const ids=["company","policy_number","policy_holder","insured_name","beneficiary","premium_note","start_date","end_date","reminder_date","payment_period","main_type_custom","main_coverage_age","notes"];
+  const ids=["company","policy_number","policy_holder","insured_name","beneficiary","premium_note","start_date","end_date","reminder_date","payment_period","main_type_custom","main_coverage_age","notes","main_prod_name","main_premium","payer","payment_method","payment_bank"];
   ids.forEach(id=>{const el=document.getElementById(id);if(el) p[id]=el.value;});
   ["currency","status","main_type","main_term_type"].forEach(id=>{const el=document.getElementById(id);if(el) p[id]=el.value;});
-  // coverage fields
+  
   const covFields=CF[p.main_type]||[];
   covFields.forEach(f=>{
     const el=document.getElementById("main_"+f.k);
     if(el) p.main_coverage[f.k]=f.type==="checkbox"?el.checked:el.value;
   });
-  // riders DOM sync
+  
   (p.riders||[]).forEach(r=>{
     const tEl=document.getElementById("rider_type_"+r.id);if(tEl) r.type=tEl.value;
     const cEl=document.getElementById("rider_custom_"+r.id);if(cEl) r.type_custom=cEl.value;
+    const pEl=document.getElementById("rider_prod_name_"+r.id);if(pEl) r.prod_name=pEl.value;
+    const prEl=document.getElementById("rider_premium_"+r.id);if(prEl) r.premium=prEl.value;
     const tmEl=document.getElementById("rider_term_"+r.id);if(tmEl) r.term_type=tmEl.value;
     const aEl=document.getElementById("rider_age_"+r.id);if(aEl) r.coverage_age=aEl.value;
     const sEl=document.getElementById("rider_status_"+r.id);if(sEl) r.status=sEl.value;
     const rFields=CF[r.type]||[];
     rFields.forEach(f=>{const el=document.getElementById("rider_"+r.id+"_"+f.k);if(el) r.coverage[f.k]=f.type==="checkbox"?el.checked:el.value;});
   });
+  
   const idx=policies.findIndex(x=>x.id===p.id);
   if(idx>=0) policies[idx]=p;else policies.push(p);
   savePolicies();
@@ -917,6 +1003,7 @@ function editPolicy(id){
   render();
 }
 
+// 保持與舊版相同之刪除與彈窗邏輯
 function editClaim(id){
   const c=claims.find(c=>String(c.id)===String(id));
   if(!c) return;
